@@ -53,6 +53,7 @@ testCross2 = do v1x <- stdUniform
                     v2' = V.Vec3 (v2x, v2y, v2z)
                     cross = v1 `LA.vCross` v2
                     cross' = V.crossVec3 v1' v2'
-                print (cross, cross')
+                print cross
+                print cross'
              
 
