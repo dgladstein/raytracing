@@ -44,10 +44,15 @@ newtype Ray = Ray (Vec3, Vec3)
 
 cameraRay :: State -> Int -> Int -> Ray 
 cameraRay state r_ c_ =
-  let x = fromIntegral c_
-      y = fromIntegral r_
-      (Camera (eye, center, up, fov)) = camera state
+  let c = camera state
       (width_, height_) = size state
+  in
+   rayFromPixel c width_ height_ r_ c_
+
+rayFromPixel c width_ height_ r_ c_ =
+  let Camera (eye, center, up, fov) = c
+      x = fromIntegral c_
+      y = fromIntegral r_
       width = fromIntegral width_
       height = fromIntegral height_
       a = eye `vMinus` center
