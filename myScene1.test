@@ -1,0 +1,40 @@
+size 320 240 
+output myScene1.png
+
+camera 0 0 -5   0 0 0    0 1 0   45
+
+maxverts 8
+
+vertex -1 -1 -1
+vertex +1 -1 -1 
+vertex +1 +1 -1 
+vertex -1 +1 -1 
+vertex -1 -1 +1
+vertex +1 -1 +1 
+vertex +1 +1 +1
+vertex -1 +1 +1
+ 
+# red --- centered
+
+ambient 1 0 0
+sphere 0 0 0.5   0.5
+
+# green --- x
+
+ambient 0 1 0
+sphere 1 0 0   .5
+
+ambient 0 .5 0
+sphere -1 0 0   .5
+
+# blue --- y
+
+ambient 0 0 1
+sphere 0 1 0   .5
+
+ambient 0 0 .5
+sphere 0 -1 0   .5
+
+ambient .5 .5 .5
+
+tri 4 5 6
