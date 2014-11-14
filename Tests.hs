@@ -15,10 +15,10 @@ testCamera = let eye = LA.Vec3 (0, 4, -4)
                  up' = V.Vec3 (1, 1, 0)
 
                  fov = 45
-                 width = 48
-                 height = 36
-                 r = 20
-                 c = 30
+                 width = 480
+                 height = 360
+                 r = 200
+                 c = 300
                  RS.Ray (origin, direction) = RS.rayFromPixel (RS.Camera (eye, center, up, fov * pi / 180)) width height c r
 
                  c' = R.Camera eye' center' up' $ fov * pi / 180

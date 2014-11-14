@@ -11,6 +11,8 @@ vNorm v = (1 / vMag v) `vScale` v
 
 vMag v = sqrt $ v `vDot` v
 
+v1 `vDist` v2 = vMag $ v1 `vMinus` v2
+
 (Vec3 (x1, y1, z1)) `vPlus` (Vec3 (x2, y2, z2)) = Vec3 (x1 + x2, y1 + y2, z1 + z2)
 
 (Vec3 (x1, y1, z1)) `vMinus` (Vec3 (x2, y2, z2)) = Vec3 (x1 - x2, y1 - y2, z1 - z2)

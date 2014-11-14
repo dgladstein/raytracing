@@ -132,7 +132,7 @@ render world@(World (state, lights, geometry)) =
                 c <- [0 .. width]]
       (Camera (eye, center, up, fov)) = camera state
       msg = show $ (eye `vMinus` center) `vDot` up
-  in trace msg ppm
+  in {-trace msg-} ppm
 
 findColor world@(World (state, lights, geometry)) r c =
   let ray = cameraRay state r c
@@ -165,13 +165,19 @@ rayGeometryIntersect (Ray (rayPoint, rayDirection)) (Geometry (Sphere c r, state
       a1 = 2*(p1 `vDot` p0_c)
       a2 = (p0_c `vDot` p0_c) - r^2
       roots = quadraticRoots a0 a1 a2
+      dist r = let rPoint = p0 `vPlus` (vScale r p1)
+               in rayPoint `vDist` (fromH $ xform .*. (hPoint rPoint))
  in case roots of
-    [r1, r2] | r1 > 0 -> Just r1
-    [r1, r2] | r1 < 0 && r2 > 0 -> Just r2
+    [r1, r2] | r1 > 0 -> Just $ dist r1
+    [r1, r2] | r1 < 0 && r2 > 0 -> Just $ dist r2
     _ -> Nothing
 
-rayGeometryIntersect (Ray (r_orig, r_dir)) (Geometry (Tri v0 v1 v2, state)) = 
-  let v0v1 = v1 `vMinus` v0
+rayGeometryIntersect (Ray (r_orig_, r_dir_)) (Geometry (Tri v0 v1 v2, state)) = 
+  let (xform, inverseXform) = head $ matrixStack state
+      r_orig = fromH $ inverseXform .*. (hPoint r_orig_)
+      r_dir = fromH $ inverseXform .*. (hVector r_dir_)
+
+      v0v1 = v1 `vMinus` v0
       v0v2 = v2 `vMinus` v0
       n = v0v1 `vCross` v0v2
       nDotRay = n `vDot` r_dir
@@ -196,7 +202,10 @@ rayGeometryIntersect (Ray (r_orig, r_dir)) (Geometry (Tri v0 v1 v2, state)) =
       u = n `vDot` (v2v0 `vCross` v2p)
       outside2 = u < 0
 
-  in if noHit then Nothing else Just t
+      rPoint = r_orig `vPlus` (vScale t r_dir)
+      tDist = r_orig_ `vDist` (fromH $ xform .*. (hPoint rPoint))
+
+  in if noHit then Nothing else Just tDist
 
 newtype Hit = Hit (Maybe Double, Maybe Geometry)
               deriving Show
