@@ -42,17 +42,15 @@ newtype Camera = Camera (Vec3, Vec3, Vec3, Double)
 newtype Ray = Ray (Vec3, Vec3)
               deriving Show
 
-cameraRay :: State -> Int -> Int -> Ray 
+cameraRay :: State -> Double -> Double -> Ray 
 cameraRay state r_ c_ =
   let c = camera state
       (width_, height_) = size state
   in
    rayFromPixel c width_ height_ r_ c_
 
-rayFromPixel c width_ height_ r_ c_ =
+rayFromPixel c width_ height_ y x =
   let Camera (eye, center, up, fov) = c
-      x = fromIntegral c_
-      y = fromIntegral r_
       width = fromIntegral width_
       height = fromIntegral height_
       a = eye `vMinus` center
@@ -126,10 +124,10 @@ newtype World = World (State, [Light], [Geometry])
 render :: World -> PPM
 render world@(World (state, lights, geometry)) =
   let (width, height) = size state
-      ppm = PPM (listArray ((0, 0), (height, width)) pixels)
-      pixels = [findColor world r c |
-                r <- [0 .. height],
-                c <- [0 .. width]]
+      ppm = PPM (listArray ((1, 1), (height, width)) pixels)
+      pixels = [findColor world (fromIntegral r - 0.5) (fromIntegral c - 0.5) |
+                r <- [1 .. height],
+                c <- [1 .. width]]
       (Camera (eye, center, up, fov)) = camera state
       msg = show $ (eye `vMinus` center) `vDot` up
   in {-trace msg-} ppm
