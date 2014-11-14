@@ -19,7 +19,9 @@ instance Show PPM where
         fileLines = headerLine : dataLines
         headerLine = unwords ["P3", show $ cMax - cMin + 1, show $ rMax - rMin + 1, "255"]
         dataLines = [unwords [show (pixels!(r, c)) | c <- [cMin .. cMax]]
-                    | r <- [rMin .. rMax]]
+                    | r <- [rMax, rMax-1 .. rMin]]
+
+
     in unlines fileLines
 
 test = writeFile "test.ppm" (show (PPM (listArray ((0, 0), (10, 20)) (repeat (Pixel (0.21, 0.41, 0.61))))))

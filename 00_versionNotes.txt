@@ -1,0 +1,9 @@
+
+
+2014-11-13 : ZB : Did NOT fix: image is one pixel too large, and rays do not go through center. The origin for that is in the fact you are taking the rays [0.. height] and [0..width], whereas they should be: [0.5, 1.5 .. (height-1)] etc.  To fix in multiple places (including writePPM , Show PPM)
+
+2014-11-13 : ZB : commented call to graphicsmagick in "renderScene filename =" (to convert ppm to png ) and related items -- command = unwords ["gm convert", fname, pngFileName]
+
+2014-11-13 : ZB : Changed order of printing the rows in Show PPM to account for upside down image: "r <- [rMax, rMax-1 .. rMin] " 
+
+

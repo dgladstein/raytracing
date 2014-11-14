@@ -152,7 +152,8 @@ rayObjectIntersect :: Ray -> Hit -> Geometry -> Hit
 rayObjectIntersect ray previousHit@(Hit (distance, hitObject)) object =
   case rayGeometryIntersect ray object of
     Nothing -> previousHit
-    Just d -> if closer d distance then Hit (Just d, Just object) else previousHit
+    Just d -> --trace ("rayObjectIntersect. Just d=" ++ show d) $ 
+        if closer d distance then Hit (Just d, Just object) else previousHit
 
 rayGeometryIntersect :: Ray -> Geometry -> Maybe Double
 
@@ -182,30 +183,38 @@ rayGeometryIntersect (Ray (r_orig_, r_dir_)) (Geometry (Tri v0 v1 v2, state)) =
       n = v0v1 `vCross` v0v2
       nDotRay = n `vDot` r_dir
       edgeOn = nDotRay == 0
-      noHit = edgeOn || behind || outside0 || outside1 || outside2
+      noHit =  -- trace ("nohit = " ++ show (edgeOn || behind || outside0 || outside1 || outside2) ) $
+         edgeOn || behind || outside0 || outside1 || outside2
       d = n `vDot` v0
-      t = -(n `vDot` r_orig) / nDotRay
+      t =  -(n `vDot` r_orig) / nDotRay
+      -- behind = trace ("rayGeometryIntersect:Tri. t=" ++ show t ++ " ;; orig,dir=" ++
+      --  show r_orig ++ show r_dir ++ "  ;; vo,v1,v2="++show [v0,v1,v2] )$ t < 0
       behind = t < 0
       pHit = r_orig `vPlus` (t `vScale` r_dir)
 
       v0p = pHit `vMinus` v0
       v = n `vDot` (v0v1 `vCross` v0p)
       outside0 = v < 0
+      -- outside0 = trace ("outside0 = " ++ show (v<0) ) $v < 0
       
       v1p = pHit `vMinus` v1
       v1v2 = v2 `vMinus` v1
       w = n `vDot` (v1v2 `vCross` v1p)
       outside1 = w < 0
+      -- outside1 = trace ("outside1 = " ++ show (w<0) ) $w < 0
 
       v2p = pHit `vMinus` v2
       v2v0 = v0 `vMinus` v2
       u = n `vDot` (v2v0 `vCross` v2p)
       outside2 = u < 0
+      -- outside2 = trace ("outside2 = " ++ show (u<0) ) $u < 0
 
       rPoint = r_orig `vPlus` (vScale t r_dir)
       tDist = r_orig_ `vDist` (fromH $ xform .*. (hPoint rPoint))
 
   in if noHit then Nothing else Just tDist
+
+
 
 newtype Hit = Hit (Maybe Double, Maybe Geometry)
               deriving Show
@@ -395,11 +404,11 @@ renderScene filename =
          pngFileName = (output state)
          fname = pngFileName ++ ".ppm"
          ppm = render world
-         command = unwords ["gm convert", fname, pngFileName]
-     writeFile fname (show ppm)
-     putStrLn command
-     exitCode <- system $ command
-     print exitCode
+         -- command = unwords ["gm convert", fname, pngFileName]
+     trace ( "Showing World: " ++ show world) $ writeFile fname (show ppm)
+     --putStrLn command
+     --exitCode <- system $ command
+     --print exitCode
                        
 
           
