@@ -73,14 +73,14 @@ rayTrace myWorld = Img w h pixels
                    where pixels = map (getColorForRay myWorld) raysFromPixels
                          --trace "rayTrace:: w1,h1=" ++ show w1 ++" , "++show h1
                          raysFromPixels = map (rayFromPixel cam (w,h) ) [ (xs,ys) |
-                                            ys  <- [h1-0.5,h1-1.5..0.5],
-                                            xs  <- [0.5,1.5..w1]
+                                            ys  <- [h'-0.5,h'-1.5..0.5],
+                                            xs  <- [0.5,1.5..w'-0.5]
                                         ]
                          cam = head $ cameras myWorld
                          w   = width $ head $ imgs myWorld
+                         w'  = fromIntegral w
                          h   = height $ head $ imgs myWorld
-                         w1  = fromIntegral (w-1) :: Double   
-                         h1  = fromIntegral (h-1) :: Double   
+                         h'  = fromIntegral h
 --                  pixel_list = [ get_color_for_ray scene (ray_for_pixel w h x y) | 
 --                         y <- map fromInteger [0..height - 1], x <- map fromInteger [0..width - 1]]
 
@@ -101,6 +101,8 @@ rayFromPixel c (w,h) (x,y) =  {-if (x==50.5) then
                                     show (lookFrom c) ++ " dir=" ++ show ( roundVec3100 $ normalizeVec3 ( ru+rv+rw) )) $
                                 Ray (lookFrom c) ( normalizeVec3 ( ru+rv+rw) )
                               else-}
+                               trace ("rayFromPixel: " ++ "x,y=" ++ show x ++ " , " ++ show y ++ " Ray:: ori=" ++ 
+                                    show (lookFrom c) ++ " dir=" ++ show ( roundVec3100 $ normalizeVec3 ( ru+rv+rw) )) $
                                 Ray (lookFrom c) ( normalizeVec3 ( ru+rv+rw) )
 --                                 ( normalizeVec3 (  subVec3 
 --                                                   ( addVec3 (mulVec3 ((tan (fovx/2))*(x/w-0.5))  (u normCamera)) 
@@ -112,19 +114,20 @@ rayFromPixel c (w,h) (x,y) =  {-if (x==50.5) then
                             w' = fromIntegral w
                             h' = fromIntegral h
                             --fovx = (fovy/h') * w'
-                            fovx = atan  ( (tan (fovy)) * w'/h')
+                            fovx = 2*atan  ( (tan (fovy/2)) * w'/h')
                             ru = mulVec3 ((tan ((fovx)/2))*(x/w'-0.5)*2)   (uN normCamera)
                             rv = mulVec3 ((tan ((fovy)/2))*(y/h'-0.5)*2)   (vN normCamera)
                             rw = negate $ wN normCamera
 
 normalizeCamera :: Camera -> CameraN
-normalizeCamera (Camera eye center up fov ) = CameraN u v w fov
+normalizeCamera (Camera eye center up fov ) = {-trace msg2 $-} CameraN u v w fov
                     where
                         a = subVec3 eye center
                         b = up
                         w = normalizeVec3 a
                         u = normalizeVec3 ( crossVec3 b w)
                         v = crossVec3 w u
+                        msg2 = "(u,v,w) :: " ++ show (roundVec3100 u) ++ " , " ++ show (roundVec3100 v) ++ " , " ++ show (roundVec3100 w)
 
 
 getColorForRay :: World ->Ray -> Vec3
@@ -206,10 +209,12 @@ tv3 = Vec3 ( 1, 1,0)
 
 -- We'll return the closest positive intersection, or -1 if none
 rayTriIntersect :: Ray -> (Vec3,Vec3,Vec3) -> Double
-rayTriIntersect (Ray ori dir) (v1,v2,v3) =    findDistBary ori v1 v2 v3 bCoords
+rayTriIntersect (Ray ori dir) (v1,v2,v3) =  if qq>0 then (trace msg2 $ qq)
+                                            else qq
                                             where
                                                 bCoords = baryCoords v1 v2 v3 (rayPlaneIntersect ori dir v1 v2 v3)
-
+                                                msg2 = "In ray TriIntersect:"++ "Ray(ori,dir)=" ++ show (roundVec3100 ori) ++ " , " ++ show (roundVec3100 dir) ++"dist=" ++ show (findDistBary ori v1 v2 v3 bCoords)
+                                                qq = findDistBary ori v1 v2 v3 bCoords
 
 findDistBary :: Vec3->Vec3->Vec3->Vec3->(Double,Double,Double)->Double
 findDistBary    ori   v1    v2    v3    (alpha , beta , gama) =

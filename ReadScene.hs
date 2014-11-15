@@ -66,7 +66,8 @@ rayFromPixel c width_ height_ y x =
       mag = vMag rayDirection
       result =  Ray (eye, rayDirection)
       msg = show $ (vNorm a) `vDot` (vNorm b)
-  in {-trace msg-} result
+      msg2 = "(u,v,w) :: " ++ show (roundVec3100 u) ++ " , " ++ show (roundVec3100 v) ++ " , " ++ show (roundVec3100 w)
+  in {-trace msg2 $-} result
 
 quadraticRoots a b c =
   let disc = b^2 - 4*a*c
@@ -92,13 +93,16 @@ scaleMatrix (Vec3 (sx, sy, sz)) =
 
 rotationMatrix (Vec3 (x, y, z)) theta =
   let (Matrix m3) =
-        (cos theta *. identityMatrix 3)
+        --(cos theta *. identityMatrix 3)
+        (cos (theta*pi/180) *. identityMatrix 3)
         .+.
-        ((1 - cos theta) *. matrixFromList 3 3 [x^2, x*y, x*z,
+        --((1 - cos theta) *. matrixFromList 3 3 [x^2, x*y, x*z,
+        ((1 - cos (theta*pi/180) ) *. matrixFromList 3 3 [x^2, x*y, x*z,
                                                 x*y, y^2, y*z,
                                                 x*z, y*z, z^2])
         .+.
-        (sin theta *. matrixFromList 3 3 [0, -z, y,
+        --(sin theta *. matrixFromList 3 3 [0, -z, y,
+        (sin (theta*pi/180 )*. matrixFromList 3 3 [0, -z, y,
                                           z, 0, -x,
                                           -y, x, 0])
       spec = assocs m3 ++ [((4, 1), 0), ((4, 2), 0), ((4, 3), 0),
@@ -133,24 +137,37 @@ render world@(World (state, lights, geometry)) =
   in {-trace msg-} ppm
 
 findColor world@(World (state, lights, geometry)) r c =
-  let ray = cameraRay state r c
+  let ray = {- trace ("from CameraRay: r,c = ("++ show r ++ " , " ++ show c ++ ")  ::Ray=" ++ showRay100 ( cameraRay state r c) )$ -}
+  				cameraRay state r c
       Hit (distance, object) = raySceneIntersect ray world
   in case object of Just (Geometry (shape, objectState)) ->
                       let Vec3 rgb = ambient objectState
                           in Pixel rgb
                     Nothing -> Pixel (0, 0, 0)
 
+showRay100 :: Ray -> String
+showRay100 (Ray (v1,v2)) = show (roundVec3100 v1) ++ show (roundVec3100 v2)
+
+
+roundVec3100 :: Vec3 -> Vec3
+roundVec3100 (Vec3 (x,y,z)) = Vec3 (round100 x, round100 y,round100 z)
+
+round100 :: Double -> Double
+round100 x = (fromIntegral $ round (100*x))/100
+
 raySceneIntersect ray (World (state, lights, geometry)) =
   foldl' (rayObjectIntersect ray) hit0 geometry
 
 closer d prevD = case prevD of Nothing -> True
                                Just d' -> d < d'
+--ZZ                               Just d' -> d > d'
 
 rayObjectIntersect :: Ray -> Hit -> Geometry -> Hit
 rayObjectIntersect ray previousHit@(Hit (distance, hitObject)) object =
-  case rayGeometryIntersect ray object of
+  case rayGeometryIntersect ray object of 
     Nothing -> previousHit
-    Just d -> --trace ("rayObjectIntersect. Just d=" ++ show d) $ 
+    Just d -> 
+    	{-trace ("rayObjectIntersect. Just d=" ++ show d ++ "; ray="++ (showRay100 ray)  {- ++ " Object: " ++ (show object) -}) $ -}
         if closer d distance then Hit (Just d, Just object) else previousHit
 
 rayGeometryIntersect :: Ray -> Geometry -> Maybe Double
@@ -159,13 +176,14 @@ rayGeometryIntersect (Ray (rayPoint, rayDirection)) (Geometry (Sphere c r, state
   let (xform, inverseXform) = head $ matrixStack state
       p0 = fromH $ inverseXform .*. (hPoint rayPoint)
       p1 = fromH $ inverseXform .*. (hVector rayDirection)
+      
       p0_c = p0 `vMinus` c
       a0 = p1 `vDot` p1
       a1 = 2*(p1 `vDot` p0_c)
       a2 = (p0_c `vDot` p0_c) - r^2
       roots = quadraticRoots a0 a1 a2
       dist r = let rPoint = p0 `vPlus` (vScale r p1)
-               in rayPoint `vDist` (fromH $ xform .*. (hPoint rPoint))
+               in rayPoint `vDist` (fromH $ xform .*. (hPoint rPoint))               
  in case roots of
     [r1, r2] | r1 > 0 -> Just $ dist r1
     [r1, r2] | r1 < 0 && r2 > 0 -> Just $ dist r2
@@ -181,7 +199,8 @@ rayGeometryIntersect (Ray (r_orig_, r_dir_)) (Geometry (Tri v0 v1 v2, state)) =
       n = v0v1 `vCross` v0v2
       nDotRay = n `vDot` r_dir
       edgeOn = nDotRay == 0
-      noHit =  -- trace ("nohit = " ++ show (edgeOn || behind || outside0 || outside1 || outside2) ) $
+      --ZZ
+      noHit' =  -- trace ("nohit = " ++ show (edgeOn || behind || outside0 || outside1 || outside2) ) $
          edgeOn || behind || outside0 || outside1 || outside2
       d = n `vDot` v0
       t =  -(n `vDot` r_orig) / nDotRay
@@ -207,8 +226,16 @@ rayGeometryIntersect (Ray (r_orig_, r_dir_)) (Geometry (Tri v0 v1 v2, state)) =
       outside2 = u < 0
       -- outside2 = trace ("outside2 = " ++ show (u<0) ) $u < 0
 
+      -- ZZ
+      zdist = rayTriIntersect' r_orig r_dir (v0,v1,v2)
+      noHit = zdist < 0
+	   
+      zPoint = rayPlaneIntersect r_orig r_dir v0 v1 v2
+
+
       rPoint = r_orig `vPlus` (vScale t r_dir)
-      tDist = r_orig_ `vDist` (fromH $ xform .*. (hPoint rPoint))
+      tDist = r_orig_ `vDist` (fromH $ xform .*. (hPoint zPoint))
+	  --tDist  =  r_orig_ `vDist` (fromH $ xform .*. (hPoint rPoint))
 
   in if noHit then Nothing else Just tDist
 
@@ -411,4 +438,70 @@ renderScene filename =
 
           
 
+{-=================================-}
+{-   Zachi Baricentric Coordinates -}
+{-=================================-}
+
+
+-- We'll return the closest positive intersection, or -1 if none
+rayTriIntersect' :: Vec3 -> Vec3 -> (Vec3,Vec3,Vec3) -> Double
+rayTriIntersect'    ori     dir     (v1,v2,v3) =  {-trace msg2 $-} findDistBary ori v1 v2 v3 bCoords
+                                            where
+                                                bCoords = baryCoords v1 v2 v3 (rayPlaneIntersect ori dir v1 v2 v3)
+                                                msg2 = "In ray TriIntersect:"++ "Ray(ori,dir)=" ++ show (roundVec3100 ori) ++ " , " ++ show (roundVec3100 dir) ++"dist=" ++ show (findDistBary ori v1 v2 v3 bCoords)
+                                           
+
+findDistBary :: Vec3->Vec3->Vec3->Vec3->(Double,Double,Double)->Double
+findDistBary    ori   v1    v2    v3    (alpha , beta , gama) =
+                                            if ( (alpha>=0) && (beta>=0) && (gama>=0) ) then 
+                                                --trace ("In findDistBAry:: then is " ++  show(alpha) ++ show(beta)++show(gama)) $ 
+                                                vMag ( (alpha `vScale` v1) `vPlus` (beta `vScale` v2) `vPlus` (gama `vScale` v3) `vMinus` ori)
+                                            else 
+                                                --trace ("In findDistBAry:: else is " ++ "ori=" ++ show(ori) ++
+                                                --"  v1=" ++ show(v1) ++ " ;; " ++ show(alpha) ++ " , " ++ show(beta)++ " , " ++ show(gama)) $ 
+                                                (-1.0)
+
+
+baryCoords :: Vec3->Vec3->Vec3->Vec3->(Double,Double,Double)
+baryCoords    v1     v2    v3    p   = --trace ("In baryCoords:: " ++ "v1=" ++ show v1 ++
+                                       --         "  v2=" ++ show v2 ++ "  v3=" ++ show v3 ++ "  p=" ++ show p ++ " ;; " ++ show(alpha) ++ " , " ++ show(beta)++ " , " ++ show(gama)  ) $ 
+                                        (alpha,beta,gama)
+                                        where
+                                                aa = p `vMinus` v1
+                                                bb = v2 `vMinus` v1
+                                                cc = v3 `vMinus` v1
+
+                                                sol = solveBary' aa bb cc
+                                                alpha = fst sol
+                                                beta = snd sol
+                                                gama = 1 - alpha - beta
+
+solveBary' :: Vec3 -> Vec3 -> Vec3 -> (Double,Double)
+solveBary' (Vec3(a1,a2,a3)) (Vec3(b1,b2,b3)) (Vec3(c1,c2,c3)) = if (det1==0) then if (det2==0) then (alpha3,beta3)
+                                                    else (alpha2,beta2) 
+                                    else (alpha1,beta1)
+    where
+        det1 = (b1*c2-b2*c1)
+        beta1 = (a1*c2 - a2*c1)/det1
+        gama1 = (b1*a2 - b2*a1)/det1
+        alpha1 = 1 - beta1 - gama1
+
+        det2 = (b1*c3 - b3*c1)
+        beta2 = (a1*c3 - a3*c1)/det2
+        gama2 = (b1*a3 - b3*a1)/det2
+        alpha2 = 1 - beta2 - gama2
+           
+
+        det3 = (b3*c2-b2*c3)
+        beta3 = (a3*c2 - a2*c3)/det3
+        gama3 = (b3*a2 - b2*a3)/det3
+        alpha3 = 1 - beta3 - gama3                        
+
+rayPlaneIntersect :: Vec3 -> Vec3 -> Vec3 -> Vec3 -> Vec3 -> Vec3
+rayPlaneIntersect    ori     dir     v1      v2      v3 =  --trace ("In rayPlaneIntersect:" ++ "ori=" ++ show ori ++ "  dir=" ++ show dir ++ " point: " ++ show (ori + (mulVec3 t dir)) ) $ 
+                                                            ori `vPlus` (t `vScale` dir)
+                                                            where 
+                                                                n' =  (v3 `vMinus` v1) `vCross` (v2 `vMinus` v1)
+                                                                n  =  vNorm n'
+                                                                t  = ( (v1 `vDot` n) - (ori `vDot` n) ) / (dir `vDot` n)
 
