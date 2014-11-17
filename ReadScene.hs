@@ -139,11 +139,12 @@ render world@(World (state, lights, geometry)) =
 findColor world@(World (state, lights, geometry)) r c =
   let ray = {- trace ("from CameraRay: r,c = ("++ show r ++ " , " ++ show c ++ ")  ::Ray=" ++ showRay100 ( cameraRay state r c) )$ -}
   				cameraRay state r c
-      Hit (distance, object) = raySceneIntersect ray world
-  in case object of Just (Geometry (shape, objectState)) ->
-                      let Vec3 rgb = ambient objectState
-                          in Pixel rgb
-                    Nothing -> Pixel (0, 0, 0)
+      hit = raySceneIntersect ray world
+  in case hit of
+    Hit (Just (distance, point, Geometry(shape, objectState))) ->
+      let Vec3 rgb = ambient objectState
+      in Pixel rgb
+    Hit Nothing -> Pixel (0, 0, 0)
 
 showRay100 :: Ray -> String
 showRay100 (Ray (v1,v2)) = show (roundVec3100 v1) ++ show (roundVec3100 v2)
@@ -163,14 +164,17 @@ closer d prevD = case prevD of Nothing -> True
 --ZZ                               Just d' -> d > d'
 
 rayObjectIntersect :: Ray -> Hit -> Geometry -> Hit
-rayObjectIntersect ray previousHit@(Hit (distance, hitObject)) object =
+rayObjectIntersect ray h@(Hit previousHit) object =
   case rayGeometryIntersect ray object of 
-    Nothing -> previousHit
-    Just d -> 
+    Nothing -> h
+    Just (d, pt) ->
+      case previousHit of
+        Nothing -> Hit (Just (d, pt, object))
     	{-trace ("rayObjectIntersect. Just d=" ++ show d ++ "; ray="++ (showRay100 ray)  {- ++ " Object: " ++ (show object) -}) $ -}
-        if closer d distance then Hit (Just d, Just object) else previousHit
+        Just (prevd, prevPoint, prevObj) ->
+          if d < prevd then Hit (Just (d, pt, object)) else h
 
-rayGeometryIntersect :: Ray -> Geometry -> Maybe Double
+rayGeometryIntersect :: Ray -> Geometry -> Maybe (Double, Vec3)
 
 rayGeometryIntersect (Ray (rayPoint, rayDirection)) (Geometry (Sphere c r, state)) =
   let (xform, inverseXform) = head $ matrixStack state
@@ -183,7 +187,8 @@ rayGeometryIntersect (Ray (rayPoint, rayDirection)) (Geometry (Sphere c r, state
       a2 = (p0_c `vDot` p0_c) - r^2
       roots = quadraticRoots a0 a1 a2
       dist r = let rPoint = p0 `vPlus` (vScale r p1)
-               in rayPoint `vDist` (fromH $ xform .*. (hPoint rPoint))               
+                   rPointWorld = (fromH $ xform .*. (hPoint rPoint))
+               in (rayPoint `vDist` rPointWorld, rPointWorld)
  in case roots of
     [r1, r2] | r1 > 0 -> Just $ dist r1
     [r1, r2] | r1 < 0 && r2 > 0 -> Just $ dist r2
@@ -234,16 +239,17 @@ rayGeometryIntersect (Ray (r_orig_, r_dir_)) (Geometry (Tri v0 v1 v2, state)) =
 
 
       rPoint = r_orig `vPlus` (vScale t r_dir)
-      tDist = r_orig_ `vDist` (fromH $ xform .*. (hPoint zPoint))
+      rPointWorld = fromH $ xform .*. (hPoint zPoint)
+      tDist = r_orig_ `vDist` rPointWorld
 	  --tDist  =  r_orig_ `vDist` (fromH $ xform .*. (hPoint rPoint))
 
-  in if noHit then Nothing else Just tDist
+  in if noHit then Nothing else Just (tDist, rPointWorld)
 
 
 
-newtype Hit = Hit (Maybe Double, Maybe Geometry)
+newtype Hit = Hit (Maybe (Double, Vec3, Geometry))
               deriving Show
-hit0 = Hit (Nothing, Nothing)
+hit0 = Hit Nothing
 
 white = Vec3 (1, 1, 1)
 black = Vec3 (0, 0, 0)
