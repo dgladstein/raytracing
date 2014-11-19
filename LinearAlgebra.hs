@@ -22,6 +22,9 @@ Vec3 (u1, u2, u3) `vCross` Vec3 (v1, v2, v3) =
 
 (Vec3 (x1, y1, z1)) `vDot` (Vec3 (x2, y2, z2)) = x1*x2 + y1*y2 + z1*z2
 
+(Vec3 (x1, y1, z1)) `vElemProd` (Vec3 (x2, y2, z2)) = Vec3 (x1*x2, y1*y2 ,z1*z2)
+
+
 newtype Vec4 = Vec4 (Double, Double, Double, Double)
              deriving (Show, Eq, Ord)
 
