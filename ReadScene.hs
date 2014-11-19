@@ -176,10 +176,12 @@ diffusedLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world
         Sphere s0 r -> vNorm (p0 `vMinus` s0)
         Tri q0 q1 q2 -> vNorm ( ( q2 `vMinus` q1) `vCross` (q0 `vMinus` q1) )
 
-      shapeN = shapeN'  
-      --shapeN = fromH $ (transpose inverseXform) .*. (hVector shapeN')
+      --shapeN = shapeN'  
+      shapeN = vNorm $ fromH $ (transpose inverseXform) .*. (hVector shapeN')
+      
       --shapeN = fromH $ (transpose xform) .*. (hVector shapeN')
-  
+      --shapeN = fromH $ inverseTransposeXform .*. (hVector shapeN')
+      
   in case hit of
     Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
         {-trace ("diffusedLight':: hit") $-} Vec3  (0, 0, 0) 
