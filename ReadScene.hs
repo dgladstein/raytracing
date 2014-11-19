@@ -113,7 +113,7 @@ rotationMatrix (Vec3 (x, y, z)) theta =
 data State = State {ambient, attenuation, diffuse, emission, specular :: Vec3,
                     shininess :: Double,
                     maxDepth :: Int,
-                    matrixStack :: [(Matrix, Matrix)],
+                    matrixStack :: [(Matrix, Matrix, Matrix)],
                     camera :: Camera,
                     output :: FilePath,
                     size :: (Int, Int),
@@ -167,7 +167,7 @@ diffusedLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world
 
       hit = {-trace ("diffusedLight':: ray' is=" ++ showRay100 ray') $-} raySceneIntersect ray' world
       
-      (xform, inverseXform) = head $ matrixStack objectState
+      (xform, inverseXform, inverseTransposeXform) = head $ matrixStack objectState
       --p0 = fromH $ inverseXform .*. (hPoint rayPoint)
       --p1 = fromH $ inverseXform .*. (hVector rayDirection)
       
@@ -225,7 +225,7 @@ rayObjectIntersect ray h@(Hit previousHit) object =
 rayGeometryIntersect :: Ray -> Geometry -> Maybe (Double, Vec3)
 
 rayGeometryIntersect (Ray (rayPoint, rayDirection)) (Geometry (Sphere c r, state)) =
-  let (xform, inverseXform) = head $ matrixStack state
+  let (xform, inverseXform, inverseTransposeXform) = head $ matrixStack state
       p0 = fromH $ inverseXform .*. (hPoint rayPoint)
       p1 = fromH $ inverseXform .*. (hVector rayDirection)
       
@@ -245,7 +245,7 @@ rayGeometryIntersect (Ray (rayPoint, rayDirection)) (Geometry (Sphere c r, state
 
 -- Need to be changed to return similar to the case for Sphere
 rayGeometryIntersect (Ray (r_orig_, r_dir_)) (Geometry (Tri v0 v1 v2, state)) = 
-  let (xform, inverseXform) = head $ matrixStack state
+  let (xform, inverseXform, inverseTransposeXform) = head $ matrixStack state
       r_orig = fromH $ inverseXform .*. (hPoint r_orig_)
       r_dir = fromH $ inverseXform .*. (hVector r_dir_)
 
@@ -310,7 +310,7 @@ id4 = identityMatrix 4
 state0 = State {ambient = black, attenuation = black, diffuse = black, emission = black, specular = black,
                 shininess = 0,
                 maxDepth = 0,
-                matrixStack = [(id4, id4)],
+                matrixStack = [(id4, id4, id4)],
                 camera = Camera (zero, zero, zero, 0),
                 output = "",
                 size = (0, 0),
@@ -381,10 +381,11 @@ interpret (World (state, lights, geometry)) (VertexTok v) =
   in World (state'', lights, geometry)
 
 state .*=. mat =
-  let ((m, mInv) : ms) = matrixStack state
+  let ((m, mInv, mInvTrans) : ms) = matrixStack state
       m' = m .*. mat
       m'Inv = inverse m'
-  in state {matrixStack = (m', m'Inv) : ms}
+      m'InvTrans = transpose m'Inv
+  in state {matrixStack = (m', m'Inv, m'InvTrans) : ms}
 
 applyRotation state axis angle =
   state .*=. rotationMatrix axis angle
