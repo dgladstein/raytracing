@@ -168,12 +168,13 @@ diffusedLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world
       hit = {-trace ("diffusedLight':: ray' is=" ++ showRay100 ray') $-} raySceneIntersect ray' world
       
       (xform, inverseXform, inverseTransposeXform) = head $ matrixStack objectState
-      --p0 = fromH $ inverseXform .*. (hPoint rayPoint)
+      
+      p0' = fromH $ inverseXform .*. (hPoint p0)
       --p1 = fromH $ inverseXform .*. (hVector rayDirection)
       
 
       shapeN' = case shape of 
-        Sphere s0 r -> vNorm (p0 `vMinus` s0)
+        Sphere s0 r -> vNorm (p0' `vMinus` s0)
         Tri q0 q1 q2 -> vNorm ( ( q2 `vMinus` q1) `vCross` (q0 `vMinus` q1) )
 
       --shapeN = shapeN'  
@@ -186,8 +187,7 @@ diffusedLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world
     Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
         {-trace ("diffusedLight':: hit") $-} Vec3  (0, 0, 0) 
     Hit Nothing -> --rgb0 {- trace ("diffusedLight':: Nothing") $ -} ---Vec3 (0,0,1)  
-                 ( max 0 (shapeN  `vDot` (vNorm dir')) ) `vScale` 
-                        (rgb0 `vElemProd` (diffuse objectState ) ) 
+                 ( max 0 (shapeN  `vDot` (vNorm dir')) ) `vScale` (rgb0 `vElemProd` (diffuse objectState ) ) 
         
 diffuseLight' _ _ _ _ _ = Vec3 (0,0,0)
 
