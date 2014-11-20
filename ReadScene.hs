@@ -129,27 +129,41 @@ render :: World -> PPM
 render world@(World (state, lights, geometry)) =
   let (width, height) = size state
       ppm = PPM (listArray ((1, 1), (height, width)) pixels)
-      pixels = [findColor world (fromIntegral r - 0.5) (fromIntegral c - 0.5) |
-                r <- [1 .. height],
-                c <- [1 .. width]]
+      rays = [ cameraRay state  (fromIntegral r - 0.5) (fromIntegral c - 0.5) |
+                r <- [1 .. height], c <- [1 .. width] ]
+      pixels = [ findColor world ray (maxDepth state) | ray<-rays]
       (Camera (eye, center, up, fov)) = camera state
       msg = show $ (eye `vMinus` center) `vDot` up
   in {-trace msg-} ppm
 
-findColor world@(World (state, lights, geometry)) r c =
-  let ray = {- trace ("from CameraRay: r,c = ("++ show r ++ " , " ++ show c ++ ")  ::Ray=" ++ showRay100 ( cameraRay state r c) )$ -}
-  				cameraRay state r c
-      hit = raySceneIntersect ray world
+findColor :: World -> Ray -> Int-> Pixel
+findColor _ _ 0 = Pixel (0,0,0)
+findColor world@(World (state, lights, geometry)) ray depth =
+  let hit = raySceneIntersect ray world
   in case hit of
     Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
       let Vec3 rgb = ambientLight objectState  `vPlus` emissionLight objectState 
                         `vPlus` diffusedLight object point ray world lights
                         `vPlus` specularLight object point ray world lights
+                        `vPlus` specularRays  object point ray world depth
       in Pixel rgb
     Hit Nothing -> Pixel (0, 0, 0)
 
-
-
+-- This should be integrated with the previous findColor.
+-- right now, just copying
+{-
+findColor' _ _ 0 = Pixel (0,0,0)
+findColor' world@(World (state, lights, geometry)) ray depth =
+  let hit = raySceneIntersect ray world
+  in case hit of
+    Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
+      let Vec3 rgb = ambientLight objectState  `vPlus` emissionLight objectState 
+                        `vPlus` diffusedLight object point ray world lights
+                        `vPlus` specularLight object point ray world lights
+                        
+      in Pixel rgb
+    Hit Nothing -> Pixel (0, 0, 0)
+-}
 
 ambientLight :: State -> Vec3
 ambientLight objState = ambient objState
@@ -159,52 +173,90 @@ emissionLight objState = emission objState
 
 
 specularLight :: Geometry->Vec3->Ray->World->[Light]-> Vec3
-specularLight    geom      p0    ray  world   ls   = 
+specularLight    geom      p0    ray  world   ls = 
       foldl  vPlus (Vec3 (0,0,0)) $ map (specularLight' geom p0 ray world) ls
 
-specularLight' :: Geometry ->                   Vec3-> Ray->               World-> Light                                ->Vec3
-specularLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world   (Light (PointLight v0 rgb0, state) ) = 
-  let dir' = vNorm $ v0 `vMinus` p0
+specularLight' :: Geometry -> Vec3 -> Ray -> World ->  Light -> Vec3
+specularLight'    (Geometry(shape,objectState)) 
+                  p0     
+                  ray@(Ray (ori,dir)) 
+                  world (Light (PointLight v0 rgb0, state) ) = 
+              -- ray is the original ray, from Camera through Pixel
+              -- p0  intersection point ray|object, in world coordinates      
+  let 
+      -- ray' : From intersection point (p0) to Light source (v0)
+      dir' = vNorm $ v0 `vMinus` p0
       ori' = p0 `vPlus` ( 0.01 `vScale` dir')
-      ray' = Ray ( ori',dir')   -- ray' is from point-on-surface to Light
+      ray' = Ray ( ori',dir') 
 
-      hit = {-trace ("diffusedLight':: ray' is=" ++ showRay100 ray') $-} raySceneIntersect ray' world
+      -- is something blocking us from seeing the light
+      hit = raySceneIntersect ray' world
       
+
+      -- The below is just for the case we are NOT blocked to the light
       (xform, inverseXform, inverseTransposeXform) = head $ matrixStack objectState
       
-      p0' = fromH $ inverseXform .*. (hPoint p0)
-      --p1 = fromH $ inverseXform .*. (hVector rayDirection)
-      
+      -- Computing the Normal. 
 
-      shapeN' = case shape of 
-        Sphere s0 r -> vNorm (p0' `vMinus` s0)
+      -- For the sphere, we need to go to Object coordinates first.
+      -- p0' is in Object coordinates
+      p0' = fromH $ inverseXform .*. (hPoint p0)      
+
+      shapeN = case shape of 
+        Sphere s0 r -> vNorm $ fromH $ inverseTransposeXform .*. (hVector (p0' `vMinus` s0))
         Tri q0 q1 q2 -> vNorm ( ( q2 `vMinus` q1) `vCross` (q0 `vMinus` q1) )
 
-      --shapeN = shapeN'  
-      --shapeN = vNorm $ fromH $ (transpose inverseXform) .*. (hVector shapeN')
-      shapeN = vNorm $ fromH $ inverseTransposeXform .*. (hVector shapeN')
+      -- Flip the ray about the Normal
       
-      -- Flipp the ray about the Normal
       _p1 = (dir' `vDot` shapeN ) `vScale` shapeN
       _p2 = dir' `vMinus` _p1 
-
-      -- Flipped ray
       dir'' = _p1 `vMinus` _p2
-      ray'' = Ray (ori', _p1 `vMinus` _p2)
+      
+      --dir'' = ((2* (dir' `vDot` shapeN)) `vScale` shapeN)`vMinus` dir'
+      -- Flipped ray
+      ray'' = Ray (ori', dir'')
+
+
+      --
+      dirCam' = Vec3(0,0,0) `vMinus` dir
       -- Cosine of angle between light-flipped-ray and observer
-      shin = dir'' `vDot` dir
-      --- Alternative way to calculate in the slides.
+      shin = dir'' `vDot` dirCam'
 
-
+      
   in case hit of
     Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
-        {-trace ("diffusedLight':: hit") $-} Vec3  (0, 0, 0) 
-    Hit Nothing -> --rgb0 {- trace ("diffusedLight':: Nothing") $ -} ---Vec3 (0,0,1)  
-                 ( max 0 ( shin ** (shininess objectState) ) ) `vScale` (rgb0 `vElemProd` (specular objectState ) ) 
+        {-trace ("diffusedLight':: hit") $-} Vec3  (0, 0, 0)
+    Hit Nothing -> --trace  ("Shin=" ++ show (round100 shin) ) $ --rgb0 {- trace ("diffusedLight':: Nothing") $ -} ---Vec3 (0,0,1)  
+                 ( (max 0  shin) ** (shininess objectState)  ) `vScale` (rgb0 `vElemProd` (specular objectState ) ) 
         
-specularLight' _ _ _ _ _ = Vec3 (0,0,0)
+--specularLight' _ _ _ _ _ _ = Vec3 (0,0,0)
+
+pixelToVec3 :: Pixel -> Vec3
+pixelToVec3 ( Pixel(r,g,b)) = Vec3(r,g,b)
 
 
+specularRays :: Geometry ->                   Vec3-> Ray->               World-> Int  -> Vec3
+specularRays    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world   depth = 
+  let       
+      (xform, inverseXform, inverseTransposeXform) = head $ matrixStack objectState
+
+      shapeN' = case shape of 
+        Sphere s0 r -> vNorm (  (fromH $ inverseXform .*. (hPoint p0)) `vMinus` s0)
+        Tri q0 q1 q2 -> vNorm ( ( q2 `vMinus` q1) `vCross` (q0 `vMinus` q1) )
+      shapeN = vNorm $ fromH $ inverseTransposeXform .*. (hVector shapeN')
+      
+      --
+      dirCam' = Vec3(0,0,0) `vMinus` dir
+      -- Flip the ray about the Normal
+      _q1 = (dirCam' `vDot` shapeN ) `vScale` shapeN
+      _q2 = dirCam' `vMinus` _q1 
+      dirQ = _q1 `vMinus` _q2
+      oriQ = p0 `vPlus` ( 0.01 `vScale` dirQ)
+      rayQ = Ray (oriQ, dirQ)
+      
+      rgb = (pixelToVec3 ( findColor world rayQ (depth-1) ))  `vElemProd` (specular objectState )
+
+  in rgb
 
 
 
@@ -245,7 +297,7 @@ diffusedLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world
     Hit Nothing -> --rgb0 {- trace ("diffusedLight':: Nothing") $ -} ---Vec3 (0,0,1)  
                  ( max 0 (shapeN  `vDot` (vNorm dir')) ) `vScale` (rgb0 `vElemProd` (diffuse objectState ) ) 
         
-diffuseLight' _ _ _ _ _ = Vec3 (0,0,0)
+diffusedLight' _ _ _ _ _ = Vec3 (0,0,0)
 
 
 
