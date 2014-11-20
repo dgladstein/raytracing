@@ -144,14 +144,70 @@ findColor world@(World (state, lights, geometry)) r c =
     Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
       let Vec3 rgb = ambientLight objectState  `vPlus` emissionLight objectState 
                         `vPlus` diffusedLight object point ray world lights
+                        `vPlus` specularLight object point ray world lights
       in Pixel rgb
     Hit Nothing -> Pixel (0, 0, 0)
+
+
+
 
 ambientLight :: State -> Vec3
 ambientLight objState = ambient objState
 
 emissionLight :: State -> Vec3
 emissionLight objState = emission objState
+
+
+specularLight :: Geometry->Vec3->Ray->World->[Light]-> Vec3
+specularLight    geom      p0    ray  world   ls   = 
+      foldl  vPlus (Vec3 (0,0,0)) $ map (specularLight' geom p0 ray world) ls
+
+specularLight' :: Geometry ->                   Vec3-> Ray->               World-> Light                                ->Vec3
+specularLight'    (Geometry(shape,objectState)) p0     ray@(Ray (ori,dir)) world   (Light (PointLight v0 rgb0, state) ) = 
+  let dir' = vNorm $ v0 `vMinus` p0
+      ori' = p0 `vPlus` ( 0.01 `vScale` dir')
+      ray' = Ray ( ori',dir')   -- ray' is from point-on-surface to Light
+
+      hit = {-trace ("diffusedLight':: ray' is=" ++ showRay100 ray') $-} raySceneIntersect ray' world
+      
+      (xform, inverseXform, inverseTransposeXform) = head $ matrixStack objectState
+      
+      p0' = fromH $ inverseXform .*. (hPoint p0)
+      --p1 = fromH $ inverseXform .*. (hVector rayDirection)
+      
+
+      shapeN' = case shape of 
+        Sphere s0 r -> vNorm (p0' `vMinus` s0)
+        Tri q0 q1 q2 -> vNorm ( ( q2 `vMinus` q1) `vCross` (q0 `vMinus` q1) )
+
+      --shapeN = shapeN'  
+      --shapeN = vNorm $ fromH $ (transpose inverseXform) .*. (hVector shapeN')
+      shapeN = vNorm $ fromH $ inverseTransposeXform .*. (hVector shapeN')
+      
+      -- Flipp the ray about the Normal
+      _p1 = (dir' `vDot` shapeN ) `vScale` shapeN
+      _p2 = dir' `vMinus` _p1 
+
+      -- Flipped ray
+      dir'' = _p1 `vMinus` _p2
+      ray'' = Ray (ori', _p1 `vMinus` _p2)
+      -- Cosine of angle between light-flipped-ray and observer
+      shin = dir'' `vDot` dir
+      --- Alternative way to calculate in the slides.
+
+
+  in case hit of
+    Hit (Just (distance, point, object@(Geometry(shape, objectState)))) ->
+        {-trace ("diffusedLight':: hit") $-} Vec3  (0, 0, 0) 
+    Hit Nothing -> --rgb0 {- trace ("diffusedLight':: Nothing") $ -} ---Vec3 (0,0,1)  
+                 ( max 0 ( shin ** (shininess objectState) ) ) `vScale` (rgb0 `vElemProd` (specular objectState ) ) 
+        
+specularLight' _ _ _ _ _ = Vec3 (0,0,0)
+
+
+
+
+
 
 
 diffusedLight :: Geometry->Vec3->Ray->World->[Light]-> Vec3
